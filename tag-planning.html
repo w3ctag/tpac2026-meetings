@@ -1,0 +1,2147 @@
+<!DOCTYPE html>
+		<head>
+			<meta charset="utf-8">
+			<title>TPAC scheduling helper</title>
+			<meta name="color-scheme" content="dark light" />
+			<style>:root {
+	font-family: sans-serif;
+	line-height: 1.5;
+	font-size: 1.2rem;
+
+	--default: grey;
+	--cancelled: var(--default);
+	--invalid: red;
+	--match-exact: green;
+	--match-miss: red;
+	--match-subset: orange;
+	--highlight: blue;
+
+	--toprule: 0.15rem;
+	--midrule: calc(0.5 * var(--toprule));
+	--totally-rules: 0.01rem;
+
+	--sidebar-width: 19rem;
+	--sidebar-gap: 1rem;
+	--details-popup-width: 35rem;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--default: grey;
+		--cancelled: var(--default);
+		--invalid: deeppink;
+		--match-exact: green;
+		--match-miss: deeppink;
+		--match-subset: orange;
+		--highlight: yellow;
+	}
+}
+
+body {
+	width: 60rem;
+	max-width: 98vw;
+	margin: auto;
+}
+
+nav>ul {
+	line-height: normal;
+}
+
+button,
+input,
+select {
+	font-size: inherit;
+}
+
+button {
+	padding: 0.25rem 0.5rem;
+}
+
+ol.clashing li {
+	border-block-end: var(--totally-rules) solid currentColor;
+}
+
+.meeting {
+	--accent-colour: var(--default);
+	margin-block-end: 1rem;
+	padding-block-end: 1rem;
+	border-radius: 0.5rem;
+	border: 4px solid var(--accent-colour);
+}
+
+.meeting>* {
+	padding-inline: 1rem;
+}
+
+.meeting>hgroup {
+	background-color: var(--accent-colour);
+	color: contrast-color(var(--accent-colour));
+	padding-block-end: 0.5rem;
+}
+
+/* This is the heading, but we know not which level */
+.meeting>hgroup>:first-child {
+	margin: 0;
+	padding-block-start: 0.5rem;
+	font-size: 1rem;
+}
+
+.meeting>hgroup>p {
+	margin: 0;
+	padding-block-start: 0.25rem;
+	font-size: 0.8rem;
+	display: flex;
+	justify-content: space-between;
+}
+
+.meeting a {
+	word-break: break-all;
+}
+
+.meeting.nature-invalid {
+	--accent-colour: var(--invalid);
+	border: 4px dashed var(--accent-colour);
+}
+
+.meeting.match-exact {
+	--accent-colour: var(--match-exact);
+}
+
+.meeting.match-subset {
+	--accent-colour: var(--match-subset);
+}
+
+.meeting.match-miss {
+	--accent-colour: var(--match-miss);
+}
+
+.meeting.state-tentative {
+	/* NOTE: The accent colour will come from the time match. */
+	border: 4px dashed var(--accent-colour);
+}
+
+.meeting.state-cancelled {
+	--accent-colour: var(--cancelled);
+	border: 4px dashed var(--accent-colour);
+}
+
+:target.meeting {
+	outline: 2px solid var(--highlight);
+	outline-offset: 6px;
+}
+
+dl {
+	display: grid;
+	grid-template-columns: max-content auto;
+	padding-block: 0;
+}
+
+dt {
+	font-weight: bold;
+}
+
+dt::after {
+	content: ':'
+}
+
+summary {
+	cursor: pointer;
+}
+
+pre {
+	white-space: pre-wrap;
+	word-wrap: break-word;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+th {
+	font-weight: bold;
+}
+
+th,
+td {
+	padding-inline: 0.5rem;
+}
+
+thead tr:first-child {
+	border-block-start: var(--toprule) solid currentColor;
+	border-block-end: var(--midrule) solid currentColor;
+}
+
+tr {
+	border-block-end: var(--totally-rules) solid currentColor;
+}
+
+tr:last-child {
+	border-block-end: var(--toprule) solid currentColor;
+}
+
+table ul {
+	list-style-type: none;
+	padding: 0;
+}
+
+@media screen and (min-width: 80rem) {
+	body {
+		width: auto;
+	}
+
+	nav {
+		position: sticky;
+		top: 0.5rem;
+		width: var(--sidebar-width);
+		float: left;
+		max-height: calc(100vh - 0.5rem - 2rem);
+		/* 2rem for the footer */
+		overflow-y: auto;
+	}
+
+	nav>h2 {
+		margin-block-start: 0;
+	}
+
+	main {
+		margin-inline-start: calc(var(--sidebar-width) + var(--sidebar-gap));
+	}
+
+	main .restrained {
+		width: 60rem;
+		max-width: calc(98vw - (var(--sidebar-width) + var(--sidebar-gap)));
+	}
+
+	main .meeting-container {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, 40rem);
+		gap: 1rem;
+	}
+
+	.meeting {
+		margin-block-end: 0;
+	}
+
+	pre {
+		position: absolute;
+		margin: 0;
+		padding: 1rem;
+		background-color: light-dark(white, black);
+		color: light-dark(black, white);
+		max-width: var(--details-popup-width);
+	}
+
+	footer {
+		position: fixed;
+		left: 0;
+		bottom: 0;
+		width: var(--sidebar-width);
+	}
+
+	footer>* {
+		margin: 0;
+	}
+}</style>
+		</head>
+		<body>
+			<header>
+				<h1>TPAC scheduling helper: Full Meeting List</h1>
+			</header>
+			<nav>
+				<h2>Meeting Days</h2>
+				<ul><li><p><a href="#before">
+				Before TPAC
+			</a></p></li><li><p><a href="#monday">
+				Monday
+			</a></p></li><li><p><a href="#tuesday">
+				Tuesday
+			</a></p></li><li><p><a href="#wednesday">
+				Wednesday
+			</a></p></li><li><p><a href="#thursday">
+				Thursday
+			</a></p></li><li><p><a href="#friday">
+				Friday
+			</a></p></li></ul>
+			</nav>
+			<main><section aria-labelledby="before">
+		<h2 id="before">Before TPAC</h2><div class="meeting-container"></div></section><section aria-labelledby="monday">
+		<h2 id="monday">Monday</h2><div class="meeting-container"><div class="meeting">
+		<hgroup>
+			<h1>Welcome session for TPAC newcomers</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Other</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>08:00&ndash;09:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/97c1a38e-0ed3-443e-bbba-1c42d0ce0dbd/">https://www.w3.org/events/meetings/97c1a38e-0ed3-443e-bbba-1c42d0ce0dbd/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-0">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-0"
+			  aria-labelledby="button-0 heading-0"
+			  aria-describedby="repo-0">Plan to attend</button>
+		</form></div>
+<div class="meeting state-cancelled">
+		<hgroup>
+			<h1>Accessibility Conformance Testing (ACT) Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Cancelled</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/452ed4de-1205-4552-9ea5-78382f4ac4c9/">https://www.w3.org/events/meetings/452ed4de-1205-4552-9ea5-78382f4ac4c9/</a></dd></dl></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-1">Accessibility Guidelines Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/30a523e1-a143-40b2-9700-377675e28237/">https://www.w3.org/events/meetings/30a523e1-a143-40b2-9700-377675e28237/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-1">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-1"
+			  aria-labelledby="button-1 heading-1"
+			  aria-describedby="repo-1">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-2">Accessible Rich Internet Applications Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/41e115b8-8a3f-4f70-a873-716b6d9923c6/">https://www.w3.org/events/meetings/41e115b8-8a3f-4f70-a873-716b6d9923c6/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-2">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-2"
+			  aria-labelledby="button-2 heading-2"
+			  aria-describedby="repo-2">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-3">Advisory Board</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/03015602-5e7c-469f-a042-b7806016cc14/">https://www.w3.org/events/meetings/03015602-5e7c-469f-a042-b7806016cc14/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-3">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-3"
+			  aria-labelledby="button-3 heading-3"
+			  aria-describedby="repo-3">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-4">Audio Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/1f15c624-fcf7-4ae9-940d-27a93f0e1011/">https://www.w3.org/events/meetings/1f15c624-fcf7-4ae9-940d-27a93f0e1011/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-4">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-4"
+			  aria-labelledby="button-4 heading-4"
+			  aria-describedby="repo-4">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-5">Autonomous Agents on the Web Community Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/d5d8738b-a68b-41fa-81e0-87170a8de54b/">https://www.w3.org/events/meetings/d5d8738b-a68b-41fa-81e0-87170a8de54b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-5">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-5"
+			  aria-labelledby="button-5 heading-5"
+			  aria-describedby="repo-5">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-6">Internationalization Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/abf4c744-731f-4546-91bc-32d9e229d5cd/">https://www.w3.org/events/meetings/abf4c744-731f-4546-91bc-32d9e229d5cd/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-6">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-6"
+			  aria-labelledby="button-6 heading-6"
+			  aria-describedby="repo-6">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-7">Media and Entertainment IG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/eb691fcd-ff14-4fd8-b8c5-b1d4e9c3a14e/">https://www.w3.org/events/meetings/eb691fcd-ff14-4fd8-b8c5-b1d4e9c3a14e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-7">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-7"
+			  aria-labelledby="button-7 heading-7"
+			  aria-describedby="repo-7">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-8">Publishing Maintenance WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/983a8c37-1681-4d65-802b-0444f4a5d1ba/">https://www.w3.org/events/meetings/983a8c37-1681-4d65-802b-0444f4a5d1ba/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-8">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-8"
+			  aria-labelledby="button-8 heading-8"
+			  aria-describedby="repo-8">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-9">Sustainable Web IG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0596cb91-9674-42a0-85f4-94625096ec81/">https://www.w3.org/events/meetings/0596cb91-9674-42a0-85f4-94625096ec81/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-9">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-9"
+			  aria-labelledby="button-9 heading-9"
+			  aria-describedby="repo-9">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-10">Technical Architecture Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/57ea39a8-e02e-42e0-854b-c5cf67fcdd57/">https://www.w3.org/events/meetings/57ea39a8-e02e-42e0-854b-c5cf67fcdd57/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-10">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-10"
+			  aria-labelledby="button-10 heading-10"
+			  aria-describedby="repo-10">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-11">Web Application Security Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5c7f5844-ee1e-48de-ad2d-464fd6c8d241/">https://www.w3.org/events/meetings/5c7f5844-ee1e-48de-ad2d-464fd6c8d241/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-11">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-11"
+			  aria-labelledby="button-11 heading-11"
+			  aria-describedby="repo-11">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-12">Web Applications WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/85ac83ae-a413-4753-8fd7-a40d8834fd90/">https://www.w3.org/events/meetings/85ac83ae-a413-4753-8fd7-a40d8834fd90/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-12">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-12"
+			  aria-labelledby="button-12 heading-12"
+			  aria-describedby="repo-12">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-13">Web Machine Learning WG, Web Machine Learning CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/dfcd7873-1491-4b68-ae1c-fe3e54c849f0/">https://www.w3.org/events/meetings/dfcd7873-1491-4b68-ae1c-fe3e54c849f0/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-13">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-13"
+			  aria-labelledby="button-13 heading-13"
+			  aria-describedby="repo-13">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-14">Web of Things PlugFest</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5e0dd2dc-85ea-4a02-83b6-7f6cb992f15d/">https://www.w3.org/events/meetings/5e0dd2dc-85ea-4a02-83b6-7f6cb992f15d/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-14">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-14"
+			  aria-labelledby="button-14 heading-14"
+			  aria-describedby="repo-14">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-15">Web Payment Security Interest Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7fb96010-fd15-46e2-8300-1b3f90e04828/">https://www.w3.org/events/meetings/7fb96010-fd15-46e2-8300-1b3f90e04828/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-15">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-15"
+			  aria-labelledby="button-15 heading-15"
+			  aria-describedby="repo-15">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-16">Web Performance Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/379be695-7fc9-44d6-85a1-02ff1f20b3da/">https://www.w3.org/events/meetings/379be695-7fc9-44d6-85a1-02ff1f20b3da/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-16">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-16"
+			  aria-labelledby="button-16 heading-16"
+			  aria-describedby="repo-16">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-17">web-platform-tests Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/9eecdda7-1975-4ff3-a0bd-cf56465d75ed/">https://www.w3.org/events/meetings/9eecdda7-1975-4ff3-a0bd-cf56465d75ed/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-17">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-17"
+			  aria-labelledby="button-17 heading-17"
+			  aria-describedby="repo-17">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-18">Immersive Web WG, Immersive Web CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/d8c968ca-bda3-438d-8329-6c0219ed6aaa/">https://www.w3.org/events/meetings/d8c968ca-bda3-438d-8329-6c0219ed6aaa/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-18">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-18"
+			  aria-labelledby="button-18 heading-18"
+			  aria-describedby="repo-18">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-19">Media and Entertainment IG, Timed Text WG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0dbf05a2-7324-4a8e-b16f-c5a26f961185/">https://www.w3.org/events/meetings/0dbf05a2-7324-4a8e-b16f-c5a26f961185/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-19">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-19"
+			  aria-labelledby="button-19 heading-19"
+			  aria-describedby="repo-19">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-20">RDF & SPARQL Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/ed125ed5-2d0a-4ca4-aab6-bfba882ec7fd/">https://www.w3.org/events/meetings/ed125ed5-2d0a-4ca4-aab6-bfba882ec7fd/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-20">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-20"
+			  aria-labelledby="button-20 heading-20"
+			  aria-describedby="repo-20">Plan to attend</button>
+		</form></div>
+<div class="meeting state-cancelled">
+		<hgroup>
+			<h1>Verifiable Credentials Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Cancelled</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/09ac5f9e-ed99-4c29-954e-532366820477/">https://www.w3.org/events/meetings/09ac5f9e-ed99-4c29-954e-532366820477/</a></dd></dl></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-21">Web of Things CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/a5c6d52b-a3e2-4356-908f-15b8cb81643b/">https://www.w3.org/events/meetings/a5c6d52b-a3e2-4356-908f-15b8cb81643b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-21">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-21"
+			  aria-labelledby="button-21 heading-21"
+			  aria-describedby="repo-21">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-22">WHATWG, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>13:45&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5b21190c-d84d-4f4b-ae11-7bf1c308b6dc/">https://www.w3.org/events/meetings/5b21190c-d84d-4f4b-ae11-7bf1c308b6dc/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-22">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-22"
+			  aria-labelledby="button-22 heading-22"
+			  aria-describedby="repo-22">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-23">WebDX CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c09654f9-3921-438c-b907-d073bb1d2b69/">https://www.w3.org/events/meetings/c09654f9-3921-438c-b907-d073bb1d2b69/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-23">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-23"
+			  aria-labelledby="button-23 heading-23"
+			  aria-describedby="repo-23">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-24">WebExtensions Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/857cc800-1383-4882-a86e-7b7239f967cc/">https://www.w3.org/events/meetings/857cc800-1383-4882-a86e-7b7239f967cc/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-24">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-24"
+			  aria-labelledby="button-24 heading-24"
+			  aria-describedby="repo-24">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-25">WebRTC WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/d73bb176-ae17-4eca-ba84-4769866f7669/">https://www.w3.org/events/meetings/d73bb176-ae17-4eca-ba84-4769866f7669/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-25">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-25"
+			  aria-labelledby="button-25 heading-25"
+			  aria-describedby="repo-25">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-26">WebTransport WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Monday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b444df45-7b98-4172-8028-b04243d1a238/">https://www.w3.org/events/meetings/b444df45-7b98-4172-8028-b04243d1a238/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-26">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-26"
+			  aria-labelledby="button-26 heading-26"
+			  aria-describedby="repo-26">Plan to attend</button>
+		</form></div></div></section><section aria-labelledby="tuesday">
+		<h2 id="tuesday">Tuesday</h2><div class="meeting-container"><div class="meeting state-cancelled">
+		<hgroup>
+			<h1>Accessibility Conformance Testing (ACT) Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Cancelled</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/9f4ddb33-51ae-45ea-a464-bc5a107f9767/">https://www.w3.org/events/meetings/9f4ddb33-51ae-45ea-a464-bc5a107f9767/</a></dd></dl></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-27">Accessibility Guidelines Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/379d06a4-f42d-40e8-a7df-702d4c3e56d7/">https://www.w3.org/events/meetings/379d06a4-f42d-40e8-a7df-702d4c3e56d7/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-27">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-27"
+			  aria-labelledby="button-27 heading-27"
+			  aria-describedby="repo-27">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-28">Accessible Rich Internet Applications Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/bf5bd479-05f0-4de6-8c5d-6c933cfb8e6e/">https://www.w3.org/events/meetings/bf5bd479-05f0-4de6-8c5d-6c933cfb8e6e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-28">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-28"
+			  aria-labelledby="button-28 heading-28"
+			  aria-describedby="repo-28">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-29">Authoring Tool Accessibility Guidelines Community Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/9d3b8b55-be27-4e8d-8a32-53185004a426/">https://www.w3.org/events/meetings/9d3b8b55-be27-4e8d-8a32-53185004a426/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-29">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-29"
+			  aria-labelledby="button-29 heading-29"
+			  aria-describedby="repo-29">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-30">Immersive Web WG, Immersive Web CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/bdfb220b-07a7-4118-b01a-8ff36d39d30b/">https://www.w3.org/events/meetings/bdfb220b-07a7-4118-b01a-8ff36d39d30b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-30">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-30"
+			  aria-labelledby="button-30 heading-30"
+			  aria-describedby="repo-30">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-31">Internationalization Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/8667e52c-fa2b-4d60-80d2-30096f3f912f/">https://www.w3.org/events/meetings/8667e52c-fa2b-4d60-80d2-30096f3f912f/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-31">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-31"
+			  aria-labelledby="button-31 heading-31"
+			  aria-describedby="repo-31">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-32">Media WG, Web Real-Time Communications Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/2d70bf08-8737-42fb-955a-6b072e78a1e9/">https://www.w3.org/events/meetings/2d70bf08-8737-42fb-955a-6b072e78a1e9/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-32">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-32"
+			  aria-labelledby="button-32 heading-32"
+			  aria-describedby="repo-32">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-33">Publishing Maintenance WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/178db69d-5c34-4cbe-bbfa-cb2d73ef1931/">https://www.w3.org/events/meetings/178db69d-5c34-4cbe-bbfa-cb2d73ef1931/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-33">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-33"
+			  aria-labelledby="button-33 heading-33"
+			  aria-describedby="repo-33">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-34">Sustainable Web IG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;12:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/652e4073-0be0-4086-98e9-2f2892a874c0/">https://www.w3.org/events/meetings/652e4073-0be0-4086-98e9-2f2892a874c0/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-34">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-34"
+			  aria-labelledby="button-34 heading-34"
+			  aria-describedby="repo-34">Plan to attend</button>
+		</form></div>
+<div class="meeting state-cancelled">
+		<hgroup>
+			<h1>Verifiable Credentials Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Cancelled</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/f0688664-00bf-478b-878d-80d9e9bb4517/">https://www.w3.org/events/meetings/f0688664-00bf-478b-878d-80d9e9bb4517/</a></dd></dl></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-35">Web & AI Interest Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b99c6a73-17c4-466a-804c-bac1885e1248/">https://www.w3.org/events/meetings/b99c6a73-17c4-466a-804c-bac1885e1248/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-35">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-35"
+			  aria-labelledby="button-35 heading-35"
+			  aria-describedby="repo-35">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-36">Web Applications WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;12:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/58a1f2b0-6423-485f-b2c8-74d8fce55a59/">https://www.w3.org/events/meetings/58a1f2b0-6423-485f-b2c8-74d8fce55a59/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-36">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-36"
+			  aria-labelledby="button-36 heading-36"
+			  aria-describedby="repo-36">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-37">Web Authentication WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;12:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5ce970c7-d391-4855-af37-982c346e007f/">https://www.w3.org/events/meetings/5ce970c7-d391-4855-af37-982c346e007f/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-37">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-37"
+			  aria-labelledby="button-37 heading-37"
+			  aria-describedby="repo-37">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-38">Web Machine Learning WG, Web Machine Learning CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/dcb0ae4c-9f48-4210-b489-b051a8d35ad7/">https://www.w3.org/events/meetings/dcb0ae4c-9f48-4210-b489-b051a8d35ad7/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-38">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-38"
+			  aria-labelledby="button-38 heading-38"
+			  aria-describedby="repo-38">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-39">Web of Things PlugFest</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/88507951-aa77-4223-87df-ab7ac6da25ac/">https://www.w3.org/events/meetings/88507951-aa77-4223-87df-ab7ac6da25ac/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-39">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-39"
+			  aria-labelledby="button-39 heading-39"
+			  aria-describedby="repo-39">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-40">Web Payment Security Interest Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7c2dc0be-c356-4b45-8f52-2a5ab78f1fdf/">https://www.w3.org/events/meetings/7c2dc0be-c356-4b45-8f52-2a5ab78f1fdf/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-40">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-40"
+			  aria-labelledby="button-40 heading-40"
+			  aria-describedby="repo-40">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-41">WebExtensions Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/8dc3031a-643d-47f9-98da-f1c1d3a56d70/">https://www.w3.org/events/meetings/8dc3031a-643d-47f9-98da-f1c1d3a56d70/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-41">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-41"
+			  aria-labelledby="button-41 heading-41"
+			  aria-describedby="repo-41">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-42">WebView CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>08:30&ndash;10:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/bdeef13d-0ae1-48ae-a1b9-5db7dc82d2ec/">https://www.w3.org/events/meetings/bdeef13d-0ae1-48ae-a1b9-5db7dc82d2ec/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-42">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-42"
+			  aria-labelledby="button-42 heading-42"
+			  aria-describedby="repo-42">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-43">Accessibility Conformance Testing (ACT) Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/beaaa210-6aa2-40c2-8181-d85a9e68cbe1/">https://www.w3.org/events/meetings/beaaa210-6aa2-40c2-8181-d85a9e68cbe1/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-43">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-43"
+			  aria-labelledby="button-43 heading-43"
+			  aria-describedby="repo-43">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-44">Audio Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b32cecec-481c-47c9-833a-ff01610e9a08/">https://www.w3.org/events/meetings/b32cecec-481c-47c9-833a-ff01610e9a08/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-44">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-44"
+			  aria-labelledby="button-44 heading-44"
+			  aria-describedby="repo-44">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-45">CSS Working Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;12:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c11220cf-8aa5-46eb-9c10-74b2e7ca6388/">https://www.w3.org/events/meetings/c11220cf-8aa5-46eb-9c10-74b2e7ca6388/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-45">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-45"
+			  aria-labelledby="button-45 heading-45"
+			  aria-describedby="repo-45">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-46">Equity Community Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;12:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c7e1d590-20a4-400b-97a2-3845b26f1ecd/">https://www.w3.org/events/meetings/c7e1d590-20a4-400b-97a2-3845b26f1ecd/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-46">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-46"
+			  aria-labelledby="button-46 heading-46"
+			  aria-describedby="repo-46">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-47">Web Application Security Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c6f478b4-314f-4c44-a841-a40acba3ba9e/">https://www.w3.org/events/meetings/c6f478b4-314f-4c44-a841-a40acba3ba9e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-47">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-47"
+			  aria-labelledby="button-47 heading-47"
+			  aria-describedby="repo-47">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-48">Web Fonts WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>10:30&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/2a1aa33b-c6dd-42ec-ae52-aac1e37c96c3/">https://www.w3.org/events/meetings/2a1aa33b-c6dd-42ec-ae52-aac1e37c96c3/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-48">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-48"
+			  aria-labelledby="button-48 heading-48"
+			  aria-describedby="repo-48">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-49">Documentation CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>13:15&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/e5af69e3-2559-4f97-b432-b1f40cfb09d8/">https://www.w3.org/events/meetings/e5af69e3-2559-4f97-b432-b1f40cfb09d8/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-49">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-49"
+			  aria-labelledby="button-49 heading-49"
+			  aria-describedby="repo-49">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-50">Linked Web Storage WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>13:15&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/9183a0a3-37e8-4400-a41d-62a4c590c696/">https://www.w3.org/events/meetings/9183a0a3-37e8-4400-a41d-62a4c590c696/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-50">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-50"
+			  aria-labelledby="button-50 heading-50"
+			  aria-describedby="repo-50">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-51">Web & AI Interest Group, Accessible Platform Architectures WG: Research Questions Task Force Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>13:15&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/e15c4325-e303-4cef-a22b-92da4eb5c476/">https://www.w3.org/events/meetings/e15c4325-e303-4cef-a22b-92da4eb5c476/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-51">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-51"
+			  aria-labelledby="button-51 heading-51"
+			  aria-describedby="repo-51">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-52">Web Authentication WG, Web Payments WG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>13:15&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7f5ffe2d-c418-47f1-880a-36710212b347/">https://www.w3.org/events/meetings/7f5ffe2d-c418-47f1-880a-36710212b347/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-52">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-52"
+			  aria-labelledby="button-52 heading-52"
+			  aria-describedby="repo-52">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-53">WebRTC WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>13:15&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/628352d1-0e24-43b4-aad8-99cf2b7ea191/">https://www.w3.org/events/meetings/628352d1-0e24-43b4-aad8-99cf2b7ea191/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-53">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-53"
+			  aria-labelledby="button-53 heading-53"
+			  aria-describedby="repo-53">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-54">All-Community meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Other</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>16:45&ndash;18:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/a62725ed-a980-49f8-a0bb-34df5de13714/">https://www.w3.org/events/meetings/a62725ed-a980-49f8-a0bb-34df5de13714/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-54">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-54"
+			  aria-labelledby="button-54 heading-54"
+			  aria-describedby="repo-54">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-55">Hackathon</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Other</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Tuesday</dd><dt>Time</dt><dd>19:00&ndash;22:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/a32ca796-0293-4ea6-a0e7-4149757cb2da/">https://www.w3.org/events/meetings/a32ca796-0293-4ea6-a0e7-4149757cb2da/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-55">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-55"
+			  aria-labelledby="button-55 heading-55"
+			  aria-describedby="repo-55">Plan to attend</button>
+		</form></div></div></section><section aria-labelledby="wednesday">
+		<h2 id="wednesday">Wednesday</h2><div class="meeting-container"></div></section><section aria-labelledby="thursday">
+		<h2 id="thursday">Thursday</h2><div class="meeting-container"><div class="meeting">
+		<hgroup>
+			<h1 id="heading-56">Accessibility Guidelines Working Group, Accessible Rich Internet Applications Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;10:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5049e61d-d57e-46e7-9d5c-3434da786cde/">https://www.w3.org/events/meetings/5049e61d-d57e-46e7-9d5c-3434da786cde/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-56">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-56"
+			  aria-labelledby="button-56 heading-56"
+			  aria-describedby="repo-56">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-57">Browser Testing and Tools Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/3b22c9bf-9995-449f-9f2f-757196d8858a/">https://www.w3.org/events/meetings/3b22c9bf-9995-449f-9f2f-757196d8858a/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-57">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-57"
+			  aria-labelledby="button-57 heading-57"
+			  aria-describedby="repo-57">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-58">Cascading Style Sheets (CSS) Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/54b96de2-eef4-4cb9-bec9-23a8b614bcf3/">https://www.w3.org/events/meetings/54b96de2-eef4-4cb9-bec9-23a8b614bcf3/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-58">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-58"
+			  aria-labelledby="button-58 heading-58"
+			  aria-describedby="repo-58">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-59">Devices and Sensors WG, Web Applications Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/475740b8-6f3f-4e64-a995-d0a9c75d96ec/">https://www.w3.org/events/meetings/475740b8-6f3f-4e64-a995-d0a9c75d96ec/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-59">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-59"
+			  aria-labelledby="button-59 heading-59"
+			  aria-describedby="repo-59">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-60">Documentation CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;10:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/ac1179a6-fa25-4ae3-9b7a-56fc09e83701/">https://www.w3.org/events/meetings/ac1179a6-fa25-4ae3-9b7a-56fc09e83701/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-60">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-60"
+			  aria-labelledby="button-60 heading-60"
+			  aria-describedby="repo-60">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-61">Federated Identity WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0c6307c0-0cd8-4308-9343-b61e2042d15f/">https://www.w3.org/events/meetings/0c6307c0-0cd8-4308-9343-b61e2042d15f/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-61">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-61"
+			  aria-labelledby="button-61 heading-61"
+			  aria-describedby="repo-61">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-62">Immersive Web WG, Immersive Web CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0ee9e6e7-21a0-4d6d-9f38-c5d9877da81f/">https://www.w3.org/events/meetings/0ee9e6e7-21a0-4d6d-9f38-c5d9877da81f/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-62">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-62"
+			  aria-labelledby="button-62 heading-62"
+			  aria-describedby="repo-62">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-63">Linked Web Storage WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/a06ad5d0-48b2-431c-a9e4-33dfacb68b35/">https://www.w3.org/events/meetings/a06ad5d0-48b2-431c-a9e4-33dfacb68b35/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-63">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-63"
+			  aria-labelledby="button-63 heading-63"
+			  aria-describedby="repo-63">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-64">Media and Entertainment Interest Group, Timed Text Working Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;10:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/78b4cb19-348a-4745-a576-0465052a8929/">https://www.w3.org/events/meetings/78b4cb19-348a-4745-a576-0465052a8929/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-64">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-64"
+			  aria-labelledby="button-64 heading-64"
+			  aria-describedby="repo-64">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-65">Mobile Accessibility Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;10:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/09e26708-7a73-475d-acc5-510d38f359b2/">https://www.w3.org/events/meetings/09e26708-7a73-475d-acc5-510d38f359b2/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-65">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-65"
+			  aria-labelledby="button-65 heading-65"
+			  aria-describedby="repo-65">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-66">Verifiable Credentials Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c9061e72-4434-4ebc-b868-f36b0511812a/">https://www.w3.org/events/meetings/c9061e72-4434-4ebc-b868-f36b0511812a/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-66">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-66"
+			  aria-labelledby="button-66 heading-66"
+			  aria-describedby="repo-66">Plan to attend</button>
+		</form></div>
+<div class="meeting state-cancelled">
+		<hgroup>
+			<h1>Verifiable Credentials Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Cancelled</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/ddc6ff2f-ed6e-481c-b3ac-cd2aedcd4481/">https://www.w3.org/events/meetings/ddc6ff2f-ed6e-481c-b3ac-cd2aedcd4481/</a></dd></dl></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-67">Web & AI Interest Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/f002d43a-d39c-447b-bf85-e99d87a11cfa/">https://www.w3.org/events/meetings/f002d43a-d39c-447b-bf85-e99d87a11cfa/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-67">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-67"
+			  aria-labelledby="button-67 heading-67"
+			  aria-describedby="repo-67">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-68">Web Editing Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/a83b6fe2-aad5-47f3-8d9b-2ce335deb470/">https://www.w3.org/events/meetings/a83b6fe2-aad5-47f3-8d9b-2ce335deb470/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-68">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-68"
+			  aria-labelledby="button-68 heading-68"
+			  aria-describedby="repo-68">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-69">Web of Things WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/00e851b8-3a02-4893-be2d-fb3596016b08/">https://www.w3.org/events/meetings/00e851b8-3a02-4893-be2d-fb3596016b08/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-69">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-69"
+			  aria-labelledby="button-69 heading-69"
+			  aria-describedby="repo-69">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-70">Web Payments Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/ac42cfe0-e46f-4fae-b778-850da97c4e74/">https://www.w3.org/events/meetings/ac42cfe0-e46f-4fae-b778-850da97c4e74/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-70">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-70"
+			  aria-labelledby="button-70 heading-70"
+			  aria-describedby="repo-70">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-71">Web Performance Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/5b9a7540-fff4-446e-bdba-d7a4bff5fc0e/">https://www.w3.org/events/meetings/5b9a7540-fff4-446e-bdba-d7a4bff5fc0e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-71">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-71"
+			  aria-labelledby="button-71 heading-71"
+			  aria-describedby="repo-71">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-72">WebExtensions Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;15:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0620ccbb-e491-49b6-a557-4bcc1a37f87e/">https://www.w3.org/events/meetings/0620ccbb-e491-49b6-a557-4bcc1a37f87e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-72">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-72"
+			  aria-labelledby="button-72 heading-72"
+			  aria-describedby="repo-72">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-73">WHATWG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>09:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/78c431a6-782d-40a5-b690-a47adaf59ee4/">https://www.w3.org/events/meetings/78c431a6-782d-40a5-b690-a47adaf59ee4/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-73">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-73"
+			  aria-labelledby="button-73 heading-73"
+			  aria-describedby="repo-73">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-74">Accessible Platform Architectures Working Group, Accessible Rich Internet Applications Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>11:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b3a6fa14-9979-43a7-b822-92e287e9c0b3/">https://www.w3.org/events/meetings/b3a6fa14-9979-43a7-b822-92e287e9c0b3/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-74">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-74"
+			  aria-labelledby="button-74 heading-74"
+			  aria-describedby="repo-74">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-75">Social Web Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>11:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/76e40fa6-2003-4ee2-b985-f6f1c87e9baa/">https://www.w3.org/events/meetings/76e40fa6-2003-4ee2-b985-f6f1c87e9baa/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-75">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-75"
+			  aria-labelledby="button-75 heading-75"
+			  aria-describedby="repo-75">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-76">Timed Text Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>11:00&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0b74bf43-1553-4f53-86b6-d7ec75b73471/">https://www.w3.org/events/meetings/0b74bf43-1553-4f53-86b6-d7ec75b73471/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-76">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-76"
+			  aria-labelledby="button-76 heading-76"
+			  aria-describedby="repo-76">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-77">WCAG 2.x Backlog Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>11:00&ndash;12:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/022b2a67-1796-43e8-bc3e-5ce504cf0966/">https://www.w3.org/events/meetings/022b2a67-1796-43e8-bc3e-5ce504cf0966/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-77">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-77"
+			  aria-labelledby="button-77 heading-77"
+			  aria-describedby="repo-77">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-78">Authoring Tool Accessibility Guidelines CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/34127390-66a9-465a-8312-87665c60443b/">https://www.w3.org/events/meetings/34127390-66a9-465a-8312-87665c60443b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-78">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-78"
+			  aria-labelledby="button-78 heading-78"
+			  aria-describedby="repo-78">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-79">Devices and Sensors WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/1a854279-28fa-4e5e-b88c-49d4fa56ff84/">https://www.w3.org/events/meetings/1a854279-28fa-4e5e-b88c-49d4fa56ff84/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-79">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-79"
+			  aria-labelledby="button-79 heading-79"
+			  aria-describedby="repo-79">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-80">Federated Identity Working Group, Federated Identity CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/64b54806-62fd-44fc-a3b0-345706c0a184/">https://www.w3.org/events/meetings/64b54806-62fd-44fc-a3b0-345706c0a184/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-80">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-80"
+			  aria-labelledby="button-80 heading-80"
+			  aria-describedby="repo-80">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-81">W3C Global Chapters & Evangelists Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/2733c61b-4884-4959-84aa-7b481bb21115/">https://www.w3.org/events/meetings/2733c61b-4884-4959-84aa-7b481bb21115/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-81">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-81"
+			  aria-labelledby="button-81 heading-81"
+			  aria-describedby="repo-81">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-82">Web Applications WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/285f3e38-c42d-43f8-93e6-be3eb9056906/">https://www.w3.org/events/meetings/285f3e38-c42d-43f8-93e6-be3eb9056906/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-82">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-82"
+			  aria-labelledby="button-82 heading-82"
+			  aria-describedby="repo-82">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-83">WebRTC WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>13:45&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/f0ca4509-ebee-4dbf-a21c-c2d7f3eaaa88/">https://www.w3.org/events/meetings/f0ca4509-ebee-4dbf-a21c-c2d7f3eaaa88/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-83">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-83"
+			  aria-labelledby="button-83 heading-83"
+			  aria-describedby="repo-83">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-84">Anti-Fraud Community Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/3df68559-82b1-4b73-8f36-ec5134a542fd/">https://www.w3.org/events/meetings/3df68559-82b1-4b73-8f36-ec5134a542fd/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-84">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-84"
+			  aria-labelledby="button-84 heading-84"
+			  aria-describedby="repo-84">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-85">Publishing Maintenance Working Group, Publishing Community Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Thursday</dd><dt>Time</dt><dd>15:30&ndash;16:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c41a6602-051c-4fb8-99e7-e85a73223271/">https://www.w3.org/events/meetings/c41a6602-051c-4fb8-99e7-e85a73223271/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-85">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-85"
+			  aria-labelledby="button-85 heading-85"
+			  aria-describedby="repo-85">Plan to attend</button>
+		</form></div></div></section><section aria-labelledby="friday">
+		<h2 id="friday">Friday</h2><div class="meeting-container"><div class="meeting">
+		<hgroup>
+			<h1 id="heading-86">Accessibility Conformance Testing (ACT) Task Force</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7376fcac-0c86-49dc-b5fa-255ef92e038d/">https://www.w3.org/events/meetings/7376fcac-0c86-49dc-b5fa-255ef92e038d/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-86">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-86"
+			  aria-labelledby="button-86 heading-86"
+			  aria-describedby="repo-86">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-87">Accessibility Guidelines Working Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;11:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7fffdb1f-64f4-4193-b370-3f5a2360d3f2/">https://www.w3.org/events/meetings/7fffdb1f-64f4-4193-b370-3f5a2360d3f2/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-87">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-87"
+			  aria-labelledby="button-87 heading-87"
+			  aria-describedby="repo-87">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-88">Authoring Tool Accessibility Guidelines CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/0d4b04b5-9e9c-4542-88fd-8e4906494adb/">https://www.w3.org/events/meetings/0d4b04b5-9e9c-4542-88fd-8e4906494adb/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-88">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-88"
+			  aria-labelledby="button-88 heading-88"
+			  aria-describedby="repo-88">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-89">Browser Testing and Tools Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/6a5fad6d-127d-4f9b-a6c1-4673581214c9/">https://www.w3.org/events/meetings/6a5fad6d-127d-4f9b-a6c1-4673581214c9/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-89">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-89"
+			  aria-labelledby="button-89 heading-89"
+			  aria-describedby="repo-89">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-90">Cascading Style Sheets (CSS) Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b871a3b9-1cd8-44db-98c0-2c6c6bf3d0e3/">https://www.w3.org/events/meetings/b871a3b9-1cd8-44db-98c0-2c6c6bf3d0e3/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-90">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-90"
+			  aria-labelledby="button-90 heading-90"
+			  aria-describedby="repo-90">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-91">Decentralized Identifier Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/25343e7d-4e99-4824-a1a9-c3dd808bf70b/">https://www.w3.org/events/meetings/25343e7d-4e99-4824-a1a9-c3dd808bf70b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-91">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-91"
+			  aria-labelledby="button-91 heading-91"
+			  aria-describedby="repo-91">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-92">Media WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;15:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/da8fd0b3-c3ac-4c6c-a3c7-5be58a8d7b43/">https://www.w3.org/events/meetings/da8fd0b3-c3ac-4c6c-a3c7-5be58a8d7b43/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-92">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-92"
+			  aria-labelledby="button-92 heading-92"
+			  aria-describedby="repo-92">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-93">Private Advertising Technology WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;11:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/69768eac-013a-4900-81fc-8a2c9f51c47d/">https://www.w3.org/events/meetings/69768eac-013a-4900-81fc-8a2c9f51c47d/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-93">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-93"
+			  aria-labelledby="button-93 heading-93"
+			  aria-describedby="repo-93">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-94">Second Screen WG, Second Screen CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;11:00</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/f34c5c7b-93cd-490f-bb47-69f3724ba105/">https://www.w3.org/events/meetings/f34c5c7b-93cd-490f-bb47-69f3724ba105/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-94">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-94"
+			  aria-labelledby="button-94 heading-94"
+			  aria-describedby="repo-94">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-95">Security Interest Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;12:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/55de4fc7-0581-48cd-b05a-d0700665ec6c/">https://www.w3.org/events/meetings/55de4fc7-0581-48cd-b05a-d0700665ec6c/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-95">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-95"
+			  aria-labelledby="button-95 heading-95"
+			  aria-describedby="repo-95">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-96">Solid CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;15:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/c4906045-7859-4dae-8785-455be40baf0a/">https://www.w3.org/events/meetings/c4906045-7859-4dae-8785-455be40baf0a/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-96">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-96"
+			  aria-labelledby="button-96 heading-96"
+			  aria-describedby="repo-96">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-97">SVG WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7f83a250-9862-4381-a484-1b3c35cc2562/">https://www.w3.org/events/meetings/7f83a250-9862-4381-a484-1b3c35cc2562/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-97">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-97"
+			  aria-labelledby="button-97 heading-97"
+			  aria-describedby="repo-97">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-98">Verifiable Credentials Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/f814ec29-8cb0-4825-a471-b286a3abd57b/">https://www.w3.org/events/meetings/f814ec29-8cb0-4825-a471-b286a3abd57b/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-98">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-98"
+			  aria-labelledby="button-98 heading-98"
+			  aria-describedby="repo-98">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-99">Web of Things WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/1b9a6022-f15a-4a63-9918-e76c21f465eb/">https://www.w3.org/events/meetings/1b9a6022-f15a-4a63-9918-e76c21f465eb/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-99">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-99"
+			  aria-labelledby="button-99 heading-99"
+			  aria-describedby="repo-99">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-100">WebExtensions Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;15:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/b30369a3-0364-455b-a4d4-05ffbc24f102/">https://www.w3.org/events/meetings/b30369a3-0364-455b-a4d4-05ffbc24f102/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-100">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-100"
+			  aria-labelledby="button-100 heading-100"
+			  aria-describedby="repo-100">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-101">WHATWG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/78c04bdc-b875-44ad-9645-7830803a47f0/">https://www.w3.org/events/meetings/78c04bdc-b875-44ad-9645-7830803a47f0/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-101">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-101"
+			  aria-labelledby="button-101 heading-101"
+			  aria-describedby="repo-101">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-102">WICG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>09:45&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/210fa73e-21da-4975-a8fd-96a1d6d9717d/">https://www.w3.org/events/meetings/210fa73e-21da-4975-a8fd-96a1d6d9717d/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-102">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-102"
+			  aria-labelledby="button-102 heading-102"
+			  aria-describedby="repo-102">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-103">Audio Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>11:30&ndash;15:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/685b6d31-f6c5-40ab-a879-50b447501993/">https://www.w3.org/events/meetings/685b6d31-f6c5-40ab-a879-50b447501993/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-103">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-103"
+			  aria-labelledby="button-103 heading-103"
+			  aria-describedby="repo-103">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-104">Immersive Web Working Group, Accessible Platform Architectures Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>11:30&ndash;12:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/d156916f-992a-4532-b620-2b4a8195520d/">https://www.w3.org/events/meetings/d156916f-992a-4532-b620-2b4a8195520d/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-104">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-104"
+			  aria-labelledby="button-104 heading-104"
+			  aria-describedby="repo-104">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-105">Online Safety Community Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>11:30&ndash;12:45</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/6b10522c-f4ef-4073-8d01-0f6782aa816a/">https://www.w3.org/events/meetings/6b10522c-f4ef-4073-8d01-0f6782aa816a/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-105">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-105"
+			  aria-labelledby="button-105 heading-105"
+			  aria-describedby="repo-105">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-106">Advisory Board</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>14:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/2da3a8d5-db71-4967-8d42-d3f31865bb07/">https://www.w3.org/events/meetings/2da3a8d5-db71-4967-8d42-d3f31865bb07/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-106">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-106"
+			  aria-labelledby="button-106 heading-106"
+			  aria-describedby="repo-106">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-107">Private Advertising Technology WG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>14:00&ndash;15:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/16825661-ee72-4467-a1c8-5c9df8bf22f1/">https://www.w3.org/events/meetings/16825661-ee72-4467-a1c8-5c9df8bf22f1/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-107">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-107"
+			  aria-labelledby="button-107 heading-107"
+			  aria-describedby="repo-107">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-108">Accessibility Guidelines Working Group, Internationalization Working Group Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>16:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/ba6826a4-ad8d-4570-87af-d9c6ac0dcd65/">https://www.w3.org/events/meetings/ba6826a4-ad8d-4570-87af-d9c6ac0dcd65/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-108">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-108"
+			  aria-labelledby="button-108 heading-108"
+			  aria-describedby="repo-108">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-109">EthTrust Community Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>16:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/8ec62816-83ff-4304-8c92-f647f10e3a4f/">https://www.w3.org/events/meetings/8ec62816-83ff-4304-8c92-f647f10e3a4f/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-109">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-109"
+			  aria-labelledby="button-109 heading-109"
+			  aria-describedby="repo-109">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-110">Private Advertising Technology CG</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>16:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/8c41fa3e-9a4a-4d80-8be1-3af26343129e/">https://www.w3.org/events/meetings/8c41fa3e-9a4a-4d80-8be1-3af26343129e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-110">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-110"
+			  aria-labelledby="button-110 heading-110"
+			  aria-describedby="repo-110">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-111">Second Screen WG, Second Screen CG Joint Meeting</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>16:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/2bac806c-38b7-41b0-b410-362980492e8e/">https://www.w3.org/events/meetings/2bac806c-38b7-41b0-b410-362980492e8e/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-111">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-111"
+			  aria-labelledby="button-111 heading-111"
+			  aria-describedby="repo-111">Plan to attend</button>
+		</form></div>
+<div class="meeting">
+		<hgroup>
+			<h1 id="heading-112">Timed Text Working Group</h1>
+			
+		</hgroup>
+		<dl>
+			<dt>Kind</dt><dd>Group</dd>
+			<dt>Status</dt><dd>Confirmed</dd><dt>Day</dt><dd>Friday</dd><dt>Time</dt><dd>16:00&ndash;17:30</dd><dt>Room</dt><dd>No assigned room yet</dd><dt>Calendar URL</dt><dd><a href="https://www.w3.org/events/meetings/7d2e2f44-f373-4544-84de-aac79cd48c6a/">https://www.w3.org/events/meetings/7d2e2f44-f373-4544-84de-aac79cd48c6a/</a></dd></dl>
+		<form>
+			<p>
+				<label id="repo-112">Repo: <select><option data-repo="w3ctag/tpac2026-meetings" data-label="">w3ctag/tpac2026-meetings :: (no label)</option></select></label>
+			</p>
+			<button id="button-112"
+			  aria-labelledby="button-112 heading-112"
+			  aria-describedby="repo-112">Plan to attend</button>
+		</form></div></div></section></main>
+		<footer>
+			<p>Generated with <a href="https://github.com/matatk/tpac-scheduling-helper">TPAC scheduling helper</a>.</p>
+		</footer>
+		<script>function createNewIssue(event) {
+	event.preventDefault()
+	const selectedOption = event.currentTarget.form.querySelector('select').selectedOptions[0]
+	const repo = selectedOption.dataset.repo
+	const label = selectedOption.dataset.label
+
+	const title = encodeURIComponent(event.currentTarget.form.parentElement.firstElementChild.firstElementChild.innerText)
+
+	const dl = event.currentTarget.form.previousElementSibling
+	const calendarUrl = dl.children[11].innerText
+	const day = dl.children[5].innerText
+	const times = dl.children[7].innerText
+	const body = encodeURIComponent([ calendarUrl, day, times ].join('\n'))
+
+	const labelParam = label ? `&labels=${label}` : ''
+	const request = repo.includes('https')
+		? `${repo}/issues/new?title=${title}&body=${body}${labelParam}`
+		: `https://www.github.com/${repo}/issues/new?title=${title}&body=${body}${labelParam}`
+
+	window.open(request)
+}
+
+for (const button of document.getElementsByTagName('button')) {
+	button.addEventListener('click', createNewIssue)
+}
+</script>
+		</body></html>
