@@ -1,0 +1,53 @@
+name: Generate the TAG's TPAC planning page and schedule
+
+on:
+  issues:
+  workflow_dispatch:
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    permissions:
+      issues: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: "matatk/tpac-scheduling-helper"
+          ref: "main"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+      # Patch a bug that stops the error text from being shown.
+      - run: gh pr checkout 12
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # This can be simplified once https://github.com/matatk/tpac-scheduling-helper/pull/11 is merged.
+      - run: npm ci || npm install
+      - run: npx tsx tsh.ts -r w3ctag/tpac-meetings -r w3c/apa-tpac-meetings -p planning.html -s schedule.html
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Lay out the Pages site
+        run: |
+          mkdir -p _site
+          mv planning.html schedule.html _site/
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy-pages:
+    needs: build
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
