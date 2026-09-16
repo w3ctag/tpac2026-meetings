@@ -21,13 +21,9 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "lts/*"
-      # Patch a bug that stops the error text from being shown.
-      - run: gh pr checkout 12
-        env:
-          GH_TOKEN: ${{ github.token }}
       # This can be simplified once https://github.com/matatk/tpac-scheduling-helper/pull/11 is merged.
       - run: npm ci || npm install
-      - run: npx tsx tsh.ts -r w3ctag/tpac-meetings -r w3c/apa-tpac-meetings -p planning.html -s schedule.html
+      - run: npx tsx tsh.ts -c tpac.ics -r w3ctag/tpac-meetings -r w3c/apa-tpac-meetings -p planning.html -s schedule.html
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Lay out the Pages site
