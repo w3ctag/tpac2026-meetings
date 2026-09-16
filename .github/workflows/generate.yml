@@ -23,7 +23,7 @@ jobs:
           node-version: "lts/*"
       # This can be simplified once https://github.com/matatk/tpac-scheduling-helper/pull/11 is merged.
       - run: npm ci || npm install
-      - run: npx tsx tsh.ts -c tpac.ics -r w3ctag/tpac2026-meetings -r w3c/apa-tpac-meetings -p planning.html -s schedule.html
+      - run: npx tsx tsh.ts -c tpac.ics -r w3ctag/tpac2026-meetings -r w3c/apa-tpac-meetings 2026 -p planning.html -s schedule.html
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Lay out the Pages site
